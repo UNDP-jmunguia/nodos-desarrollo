@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cartografía de Señales — Juventudes Venezuela</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #f5f5f3;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 24px;
+  }
+  #wrap {
+    position: relative; width: 100%; max-width: 900px; height: 620px;
+    background: #ffffff;
+    border: 1px solid #e0ddd6;
+    border-radius: 14px; overflow: hidden;
+  }
+  #cv { display: block; width: 100%; height: 100%; }
+
+  #header {
+    position: absolute; top: 18px; left: 22px; pointer-events: none;
+  }
+  #header .title {
+    font-size: 12px; font-weight: 700; color: #00283B;
+    letter-spacing: .07em; text-transform: uppercase;
+  }
+  #header .sub {
+    font-size: 11px; color: #888; margin-top: 2px; letter-spacing: .03em;
+  }
+
+  #stats {
+    position: absolute; top: 18px; right: 18px;
+    display: flex; gap: 18px; pointer-events: none;
+  }
+  .stat { text-align: right; }
+  .stat-num { font-size: 20px; font-weight: 700; color: #00283B; line-height: 1; }
+  .stat-lbl { font-size: 9px; color: #aaa; text-transform: uppercase; letter-spacing: .06em; }
+
+  #panel {
+    position: absolute; left: 18px; bottom: 18px; width: 216px;
+    background: #fff;
+    border: 1px solid #e0ddd6;
+    border-radius: 10px; padding: 14px 16px;
+    opacity: 0; transition: opacity .2s; pointer-events: none;
+    box-shadow: 0 2px 12px rgba(0,0,0,.07);
+  }
+  #panel.vis { opacity: 1; pointer-events: auto; }
+  #p-tag {
+    font-size: 9px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; margin-bottom: 5px;
+  }
+  #p-title { font-size: 14px; font-weight: 700; color: #00283B; margin-bottom: 5px; }
+  #p-body { font-size: 12px; color: #666; line-height: 1.5; margin-bottom: 10px; }
+  #p-btns { display: flex; flex-direction: column; gap: 5px; }
+  .pbtn {
+    font-size: 11px; padding: 5px 9px; border-radius: 5px; cursor: pointer;
+    border: 1px solid #ddd; background: #fafaf8;
+    color: #333; text-align: left; transition: background .12s;
+  }
+  .pbtn:hover { background: #f0ede6; }
+
+  #hint {
+    position: absolute; right: 18px; bottom: 18px;
+    font-size: 10px; color: #bbb; pointer-events: none;
+    text-align: right; line-height: 1.6;
+  }
+
+  #legend {
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+    pointer-events: none;
+  }
+  .leg { display: flex; align-items: center; gap: 4px;
+    font-size: 9.5px; color: #999; letter-spacing: .03em; }
+  .leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div id="wrap">
+  <canvas id="cv"></canvas>
+
+  <div id="header">
+    <div class="title">Cartografía de señales</div>
+    <div class="sub">Juventudes Venezuela · Signal Studios 2025–2026 · PNUD</div>
+  </div>
+
+  <div id="stats">
+    <div class="stat"><div class="stat-num">9</div><div class="stat-lbl">áreas</div></div>
+    <div class="stat"><div class="stat-num">40</div><div class="stat-lbl">clústeres</div></div>
+    <div class="stat"><div class="stat-num">180+</div><div class="stat-lbl">señales</div></div>
+    <div class="stat"><div class="stat-num">300+</div><div class="stat-lbl">jóvenes</div></div>
+  </div>
+
+  <div id="panel">
+    <div id="p-tag"></div>
+    <div id="p-title"></div>
+    <div id="p-body"></div>
+    <div id="p-btns"></div>
+  </div>
+
+  <div id="hint">clic para inspeccionar<br>arrastra para reorganizar</div>
+</div>
+
+<script>
+const wrap = document.getElementById('wrap');
+const cv   = document.getElementById('cv');
+const ctx  = cv.getContext('2d');
+
+const THEMES = [
+  { id:'empleo',     label:'Empleo',               color:'#0468B1', sub:'#03508A',
+    info:'Motor del arraigo territorial y la movilidad social juvenil.',
+    clusters:['Primer empleo','Economía digital','Emprendimiento','Informalidad'] },
+  { id:'salud',      label:'Salud mental',          color:'#1D9E75', sub:'#137055',
+    info:'Variable estratégica del desarrollo; condiciona estudio, trabajo y proyecto de vida.',
+    clusters:['Bienestar emocional','Desestigmatización','Promotores jóvenes','Políticas públicas'] },
+  { id:'inclusion',  label:'Inclusión',             color:'#C88000', sub:'#A36700',
+    info:'Condición habilitante: discapacidad, género, migración y diversidad.',
+    clusters:['Discapacidad','Género','Retornados','Comunidades indígenas'] },
+  { id:'digital',    label:'Transform. digital',    color:'#7B42B8', sub:'#5F3190',
+    info:'IA, emprendimiento digital y nuevas formas de inserción laboral.',
+    clusters:['Inteligencia artificial','Habilidades digitales','Trabajo remoto','Plataformas'] },
+  { id:'valores',    label:'Valores',               color:'#C0363A', sub:'#962A2D',
+    info:'Nuevas generaciones reconfiguran su relación con trabajo e instituciones.',
+    clusters:['Confianza inst.','Liderazgo horiz.','Cultura de cuidado','Redes sociales'] },
+  { id:'frontera',   label:'Frontera',              color:'#008C84', sub:'#006E68',
+    info:'Conectividad binacional y diversidad cultural como ventaja estratégica.',
+    clusters:['Táchira','Coop. binacional','Hub digital','Movilidad'] },
+  { id:'educacion',  label:'Educación',             color:'#185FA5', sub:'#0F4880',
+    info:'Actualización curricular y formación dual estudio-trabajo.',
+    clusters:['Currículum','Investigación aplic.','Educ. emocional','Universidades'] },
+  { id:'territorio', label:'Territorio',            color:'#3B6D11', sub:'#2A500C',
+    info:'Arraigo territorial como elección construida, no impuesta.',
+    clusters:['Arraigo','Movilidad social','Comunidades','Desarrollo local'] },
+  { id:'gobernanza', label:'Gobernanza',            color:'#854F0B', sub:'#633806',
+    info:'Participación juvenil en el diseño de políticas públicas.',
+    clusters:['Sector público','Academia','Sector privado','Co-diseño'] },
+];
+
+const W = () => wrap.clientWidth;
+const H = () => wrap.clientHeight;
+
+let nodes = [], dragging = null, dragOff = {x:0,y:0}, selected = null, pStart = null;
+
+function initNodes() {
+  nodes = [];
+  const hub = {
+    id:'hub', label:'Juventudes\nVenezuela',
+    color:'#00283B', sub:'#00283B', textColor:'#fff',
+    r:44, x:.5, y:.5, vx:0, vy:0, isHub:true,
+    info:'Proceso participativo con más de 300 jóvenes en 8 Signal Studios en universidades y territorios de Venezuela.',
+    clusters:[]
+  };
+  nodes.push(hub);
+  THEMES.forEach((t, i) => {
+    const angle = (i / THEMES.length) * Math.PI * 2 - Math.PI / 2;
+    const rx = 0.28, ry = 0.26;
+    nodes.push({
+      ...t, r:30, isHub:false, _expanded:false,
+      x: .5 + Math.cos(angle)*rx,
+      y: .5 + Math.sin(angle)*ry,
+      vx:0, vy:0,
+    });
+  });
+}
+
+function resize() {
+  cv.width  = wrap.clientWidth;
+  cv.height = wrap.clientHeight;
+}
+
+const px = n => n.x * W();
+const py = n => n.y * H();
+
+function drawEdge(a, b, sel, dashed) {
+  ctx.beginPath();
+  ctx.moveTo(px(a), py(a));
+  ctx.lineTo(px(b), py(b));
+  ctx.strokeStyle = sel ? 'rgba(0,40,59,.45)' : 'rgba(0,40,59,.1)';
+  ctx.lineWidth   = sel ? 1.5 : 0.8;
+  ctx.setLineDash(dashed ? [4,5] : []);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function wrapText(label) {
+  if (!label.includes('\n') && label.length <= 12) return [label];
+  if (label.includes('\n')) return label.split('\n');
+  const words = label.split(' ');
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0,mid).join(' '), words.slice(mid).join(' ')];
+}
+
+function drawNode(n) {
+  const x = px(n), y = py(n);
+  const isSel = selected && selected.id === n.id;
+  const r = n.r + (isSel ? 3 : 0);
+
+  if (isSel) {
+    ctx.beginPath();
+    ctx.arc(x, y, r + 7, 0, Math.PI*2);
+    ctx.fillStyle = n.color + '18';
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.fillStyle = n.isHub ? n.color : '#fff';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.strokeStyle = n.color;
+  ctx.lineWidth   = n.isHub ? 0 : (isSel ? 2.5 : 1.5);
+  ctx.stroke();
+
+  const lines = wrapText(n.label);
+  ctx.fillStyle   = n.isHub ? '#fff' : n.color;
+  ctx.textAlign   = 'center';
+  ctx.textBaseline = 'middle';
+  const fs = n.isHub ? 11 : (lines.some(l=>l.length>10) ? 9.5 : 11);
+  ctx.font = `700 ${fs}px "Helvetica Neue",Arial,sans-serif`;
+  const lh = 13;
+  const top = y - ((lines.length-1)*lh)/2;
+  lines.forEach((l,i) => ctx.fillText(l, x, top + i*lh));
+
+  if (!n.isHub && n.clusters?.length) {
+    const bx = x + r - 2, by = y - r + 2;
+    ctx.beginPath();
+    ctx.arc(bx, by, 8, 0, Math.PI*2);
+    ctx.fillStyle = n.color;
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = `700 9px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n.clusters.length, bx, by);
+  }
+}
+
+function drawSubNode(n) {
+  const x = px(n), y = py(n);
+  const isSel = selected && selected.id === n.id;
+  ctx.beginPath();
+  ctx.arc(x, y, n.r, 0, Math.PI*2);
+  ctx.fillStyle = n.parentColor + '15';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, n.r, 0, Math.PI*2);
+  ctx.strokeStyle = n.parentColor;
+  ctx.lineWidth = isSel ? 2 : 1;
+  ctx.stroke();
+  ctx.fillStyle = n.parentColor;
+  ctx.font = `600 9px "Helvetica Neue",Arial,sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const words = n.label.split(' ');
+  if (words.length > 1 && n.label.length > 10) {
+    const mid = Math.ceil(words.length/2);
+    ctx.fillText(words.slice(0,mid).join(' '), x, y-5.5);
+    ctx.fillText(words.slice(mid).join(' '), x, y+5.5);
+  } else {
+    ctx.fillText(n.label, x, y);
+  }
+}
+
+function draw() {
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const hub = nodes.find(n=>n.isHub);
+  for (const n of nodes) {
+    if (!n.isHub && !n._sub) {
+      const sel = selected && (selected.id===n.id || selected.id==='hub');
+      drawEdge(hub, n, sel, false);
+    }
+  }
+  for (const n of nodes) {
+    if (n._sub) {
+      const par = nodes.find(p=>p.id===n._parent);
+      if (par) {
+        const sel = selected && (selected.id===n.id || selected.id===n._parent);
+        drawEdge(par, n, sel, true);
+      }
+    }
+  }
+  for (const n of nodes) {
+    if (n._sub) drawSubNode(n);
+    else drawNode(n);
+  }
+}
+
+function physics() {
+  const cw = W(), ch = H();
+  const hub = nodes.find(n=>n.isHub);
+  for (const n of nodes) {
+    if (n===dragging) continue;
+    for (const m of nodes) {
+      if (n===m) continue;
+      const dx = px(n)-px(m), dy = py(n)-py(m);
+      const d  = Math.max(Math.hypot(dx,dy),1);
+      const f  = n._sub||m._sub ? 1000 : 2600;
+      n.vx += (dx/d)*(f/(d*d));
+      n.vy += (dy/d)*(f/(d*d));
+    }
+    if (n!==hub) {
+      const dx = px(hub)-px(n), dy = py(hub)-py(n);
+      const d  = Math.hypot(dx,dy)||1;
+      const ideal = n._sub ? 0.15 : 0.26;
+      const cur   = d/Math.min(cw,ch);
+      const sp    = (cur-ideal)*0.05;
+      n.vx += (dx/d)*sp*cw;
+      n.vy += (dy/d)*sp*ch;
+    }
+    n.vx += (0.5-n.x)*0.002;
+    n.vy += (0.5-n.y)*0.003;
+    n.vx *= 0.80; n.vy *= 0.80;
+    n.x = Math.max(0.04,Math.min(0.96, n.x+n.vx/cw));
+    n.y = Math.max(0.04,Math.min(0.96, n.y+n.vy/ch));
+  }
+}
+
+function loop() { physics(); draw(); requestAnimationFrame(loop); }
+
+function hitTest(cx,cy) {
+  for (const n of [...nodes].reverse()) {
+    if (Math.hypot(cx-px(n),cy-py(n))<=n.r+6) return n;
+  }
+  return null;
+}
+
+function showPanel(n) {
+  document.getElementById('p-tag').textContent  = n._sub?'clúster':(n.isHub?'proyecto':'área temática');
+  document.getElementById('p-tag').style.color  = n.color||n.parentColor||'#0468B1';
+  document.getElementById('p-title').textContent = n.label.replace('\n',' ');
+  document.getElementById('p-body').textContent  = n.info||'';
+  const btns = document.getElementById('p-btns');
+  btns.innerHTML='';
+  const actions=[];
+  if (!n._sub&&!n.isHub&&n.clusters?.length)
+    actions.push(n._expanded?'Colapsar clústeres':`Ver ${n.clusters.length} clústeres`);
+  for (const a of actions) {
+    const b=document.createElement('button');
+    b.className='pbtn'; b.textContent=a;
+    b.onclick=()=>{ toggleClusters(n); showPanel(n); };
+    btns.appendChild(b);
+  }
+  document.getElementById('panel').classList.add('vis');
+  document.getElementById('hint').style.opacity='0';
+}
+
+function toggleClusters(n) {
+  if (n._expanded) {
+    nodes=nodes.filter(s=>s._parent!==n.id);
+    n._expanded=false;
+  } else {
+    n._expanded=true;
+    const hub=nodes.find(h=>h.isHub);
+    const base=Math.atan2(py(n)-py(hub),px(n)-px(hub));
+    n.clusters.forEach((cl,i)=>{
+      const a=base+(i-(n.clusters.length-1)/2)*0.45;
+      nodes.push({
+        id:n.id+'_'+i, label:cl, _sub:true, _parent:n.id,
+        parentColor:n.color, r:17,
+        x:n.x+Math.cos(a)*0.13*(W()/H())+(Math.random()-.5)*.02,
+        y:n.y+Math.sin(a)*0.13+(Math.random()-.5)*.02,
+        vx:0,vy:0,
+        info:'Clúster identificado en los Signal Studios 2025–2026.',
+      });
+    });
+  }
+}
+
+cv.addEventListener('pointerdown',e=>{
+  const r=cv.getBoundingClientRect();
+  const x=e.clientX-r.left,y=e.clientY-r.top;
+  const hit=hitTest(x,y);
+  pStart={x,y,t:Date.now()};
+  if(hit){dragging=hit;dragOff={x:x-px(hit),y:y-py(hit)};cv.setPointerCapture(e.pointerId);}
+});
+cv.addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  const r=cv.getBoundingClientRect();
+  dragging.x=Math.max(.04,Math.min(.96,(e.clientX-r.left-dragOff.x)/W()));
+  dragging.y=Math.max(.04,Math.min(.96,(e.clientY-r.top-dragOff.y)/H()));
+  dragging.vx=dragging.vy=0;
+});
+cv.addEventListener('pointerup',e=>{
+  const r=cv.getBoundingClientRect();
+  const x=e.clientX-r.left,y=e.clientY-r.top;
+  const moved=pStart&&Math.hypot(x-pStart.x,y-pStart.y)<7;
+  const quick=pStart&&Date.now()-pStart.t<300;
+  if(moved&&quick){
+    const hit=hitTest(x,y);
+    if(hit){selected=hit;showPanel(hit);}
+    else{selected=null;document.getElementById('panel').classList.remove('vis');}
+  }
+  dragging=null;pStart=null;
+});
+
+resize();
+initNodes();
+new ResizeObserver(()=>resize()).observe(wrap);
+loop();
+</script>
+</body>
+</html>
